@@ -16,7 +16,7 @@ function App() {
     formData.append("audio", file);
     formData.append("model", selectedModel);
     try {
-      const response = await fetch("https://b906-115-99-24-216.ngrok-free.app/process_audio", {
+      const response = await fetch("https://a86d-115-99-24-216.ngrok-free.app/process_audio", {
         method: "POST",
         body: formData,
       });

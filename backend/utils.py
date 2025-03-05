@@ -29,13 +29,15 @@ def summarize_and_extract_action_items(text, use_openai=False):
     try:
         if use_openai:
             # Ensure OpenAI API key is set
-            if not os.getenv("OPENAI_API_KEY"):
+            openai_api_key = os.getenv("OPENAI_API_KEY")
+            if not openai_api_key:
+                print("OpenAI API key is not set. Falling back to local model.")
                 return generate_local_summary(text)
             
             try:
-                openai.api_key = os.getenv("OPENAI_API_KEY")
+                openai.api_key = openai_api_key
                 response = openai.ChatCompletion.create(
-                    model="gpt-4o-mini",
+                    model="gpt-4",  # Use a valid model name
                     messages=[
                         {
                             "role": "system", 
@@ -49,12 +51,12 @@ def summarize_and_extract_action_items(text, use_openai=False):
                             {text}
                             
                             Please provide:
-                            1. A concise, professional summary of the key discussion points
+                            1. A concise, professional summary of the key discussion points, along with key discussion points in ordered format
                             2. Specific, actionable items with potential assignees
                             
                             Format:
                             **Summary:**
-                            [Concise overview of the meeting]
+                            [Concise overview of the meeting along with key takeaways]
                             
                             **Action Items:**
                             - Task: [Specific action]
@@ -68,8 +70,8 @@ def summarize_and_extract_action_items(text, use_openai=False):
                 )
                 output = response.choices[0].message.content
                 return parse_openai_output(output)
-            except Exception:
-                # Fallback to local method if OpenAI fails
+            except Exception as e:
+                print(f"OpenAI API call failed: {str(e)}")
                 return generate_local_summary(text)
         
         # Local method if OpenAI is not used
