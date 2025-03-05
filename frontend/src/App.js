@@ -17,7 +17,7 @@ function App() {
     formData.append("model", selectedModel);  // Send selected model
     
     try {
-      const response = await fetch("http://127.0.0.1:5000/process_audio", {
+      const response = await fetch("https://aiqod.onrender.com/process_audio", {
         method: "POST",
         body: formData,
       });

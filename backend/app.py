@@ -5,6 +5,10 @@ from utils import transcribe_audio, summarize_and_extract_action_items, create_t
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
+@app.route("/")
+def home():
+    return jsonify({"message": "Flask backend is running!"})
+
 @app.route("/process_audio", methods=["POST"])
 def process_audio():
     try:
@@ -34,4 +38,6 @@ def process_audio():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    import os
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=True, host="0.0.0.0", port=port)
