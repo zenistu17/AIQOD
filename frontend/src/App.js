@@ -16,7 +16,7 @@ function App() {
     formData.append("audio", file);
     formData.append("model", selectedModel);
     try {
-      const response = await fetch("https://a86d-115-99-24-216.ngrok-free.app/process_audio", {
+      const response = await fetch("https://9552-115-99-24-216.ngrok-free.app/process_audio", {
         method: "POST",
         body: formData,
       });
@@ -45,6 +45,7 @@ function App() {
               className="model-select"
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value)}
+              name="model" // Add name attribute
             >
               <option value="openai">OpenAI</option>
               <option value="local">Local Inference Model</option>
@@ -57,6 +58,7 @@ function App() {
               onChange={handleFileUpload}
               className="file-input"
               id="audio-upload"
+              name="audio" // Add name attribute
             />
             <label htmlFor="audio-upload" className="file-upload-button">
               {loading ? 'Processing...' : '📂 Upload Meeting Audio'}
@@ -95,4 +97,4 @@ function App() {
   );
 }
 
-export default App;
+export default App; // <-- This should now be at the top level
