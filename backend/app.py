@@ -1,6 +1,5 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import os
 from utils import transcribe_audio, summarize_and_extract_action_items, create_trello_task
 
 app = Flask(__name__)
