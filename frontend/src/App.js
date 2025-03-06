@@ -16,12 +16,12 @@ function App() {
     formData.append("audio", file);
     formData.append("model", selectedModel);
     try {
-      const response = await fetch("https://a701-2409-40f4-38-5229-65a5-3f4f-c417-4a79.ngrok-free.app/process_audio", {
+      const response = await fetch("https://9555-115-99-24-216.ngrok-free.app/process_audio", {
         method: "POST",
         body: formData,
       });
       if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
+        throw new Error(`HTTP error! Status: ${response.status}`); // Fixed template string
       }
       const data = await response.json();
       setTranscript(data.transcript);
@@ -45,23 +45,23 @@ function App() {
               className="model-select"
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value)}
-              name="model" // Add name attribute
+              name="model"
             >
-              <option value="openai">OpenAI</option>
-              <option value="local">Local Inference Model</option>
+              <option value="openai">Gpt-4</option>
+              <option value="local">Llama 3.3</option>
             </select>
           </div>
           <div className="file-upload-wrapper">
-            <input
-              type="file"
-              accept="audio/*"
-              onChange={handleFileUpload}
-              className="file-input"
-              id="audio-upload"
-              name="audio" // Add name attribute
-            />
+          <input
+            type="file"
+            accept="audio/*, video/*"
+            onChange={handleFileUpload}
+            className="file-input"
+            id="audio-upload"
+            name="audio"
+          />
             <label htmlFor="audio-upload" className="file-upload-button">
-              {loading ? 'Processing...' : '📂 Upload Meeting Audio'}
+              {loading ? 'Processing...' : '📂 Upload Meeting Audio/Video'}
             </label>
           </div>
         </div>
@@ -97,4 +97,4 @@ function App() {
   );
 }
 
-export default App; // <-- This should now be at the top level
+export default App;

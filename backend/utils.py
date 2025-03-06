@@ -7,59 +7,197 @@ import re
 from transformers import (
     WhisperProcessor,
     WhisperForConditionalGeneration,
-    AutoModelForCausalLM,
-    AutoTokenizer,
 )
+from huggingface_hub import InferenceClient
+
+# Set device to CPU (MPS has limitations)
+device = "cpu"
+print(f"Using device: {device}")
 
 # Load Whisper model for transcription
 processor = WhisperProcessor.from_pretrained("openai/whisper-small")
-whisper_model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-small")
+whisper_model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-small").to(device)
+whisper_model.config.use_cache = False  # Disable KV cache
+whisper_model.gradient_checkpointing_enable()  # Enable gradient checkpointing
 
-# Load Mistral 7B model for summarization
-mistral_model_name = "mistralai/Mistral-7B-v0.1"
-mistral_tokenizer = AutoTokenizer.from_pretrained(mistral_model_name, use_auth_token=True)
-mistral_model = AutoModelForCausalLM.from_pretrained(mistral_model_name, use_auth_token=True)
+# Initialize Hugging Face Inference Client
+client = InferenceClient(
+    provider="sambanova",  # Replace with the correct provider if different
+    api_key=os.getenv("HUGGINGFACE_API_KEY")  # Set your Hugging Face API key in environment variables
+)
 
-def transcribe_audio(audio_file_path, chunk_size=30, overlap=5):
+def transcribe_audio(audio_file_path, chunk_size=20, overlap=5):
     """
-    Transcribe audio to text using Whisper. If the audio is not in English,
-    it will be translated to English.
+    Transcribe audio to text using Whisper in chunks.
+    If the audio is not in English, it will be translated to English.
     """
-    audio, sr = librosa.load(audio_file_path, sr=16000)
-    step_samples = (chunk_size - overlap) * sr
-    chunk_samples = chunk_size * sr
-    transcripts = []
-    for i in range(0, len(audio), step_samples):
-        chunk = audio[i:i + chunk_samples]
-        if len(chunk) < chunk_samples:
-            break
-        input_features = processor(chunk, sampling_rate=sr, return_tensors="pt").input_features
-        with torch.no_grad():
-            # Use task="translate" to ensure the output is in English
-            predicted_ids = whisper_model.generate(input_features, max_length=448, task="translate")
-        transcript = processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
-        transcripts.append(transcript)
-    return " ".join(transcripts)
+    try:
+        # Load audio
+        audio, sr = librosa.load(audio_file_path, sr=16000)
+        print(f"Audio length: {len(audio)/sr:.2f} seconds")
 
-def summarize_with_mistral(text):
+        # Calculate step size and chunk size in samples
+        step_samples = int((chunk_size - overlap) * sr)
+        chunk_samples = int(chunk_size * sr)
+
+        transcripts = []
+
+        # Process audio in chunks
+        for i in range(0, len(audio), step_samples):
+            chunk = audio[i:i + chunk_samples]
+            if len(chunk) < 0.5 * chunk_samples:  # Skip very small chunks
+                break
+
+            # Process the chunk
+            input_features = processor(chunk, sampling_rate=sr, return_tensors="pt").input_features
+            input_features = input_features.to(device)
+
+            # Create attention mask
+            attention_mask = torch.ones_like(input_features)
+
+            # Generate transcription for the chunk
+            with torch.no_grad():
+                predicted_ids = whisper_model.generate(
+                    input_features,
+                    attention_mask=attention_mask,
+                    max_length=448,
+                    task="translate",  # Translate to English
+                )
+
+            # Decode transcription for the chunk
+            transcript = processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
+            transcripts.append(transcript)
+
+        # Combine all transcripts into a single string
+        full_transcript = " ".join(transcripts)
+        print(f"Full transcript length: {len(full_transcript)} characters, {len(full_transcript.split())} words")
+        return full_transcript
+
+    except Exception as e:
+        print(f"Error in transcribe_audio: {str(e)}")
+        return ""
+
+def extract_detailed_action_items(text):
     """
-    Summarize text using Mistral 7B.
+    Extract action items using Llama-3.3-70B-Instruct hosted on Hugging Face via OpenAI API.
     """
-    input_text = f"Summarize the following meeting transcript professionally. Identify the key points discussed and give them in list format.: {text}"
-    input_ids = mistral_tokenizer(input_text, return_tensors="pt").input_ids
+    try:
+        # Create a prompt for action item extraction
+        prompt = f"""
+        Extract specific action items from the following meeting transcript. For each action item, include:
+        - Task: A clear description of the task.
+        - Assignee: The person responsible for the task.
+        - Deadline: The suggested timeline for completion.
 
-    # Generate summary
-    with torch.no_grad():
-        outputs = mistral_model.generate(input_ids, max_length=500, num_beams=5, early_stopping=True)
+        Format the action items as follows:
+        - Task: [Task description]
+        - Assignee: [Assignee name]
+        - Deadline: [Deadline]
 
-    summary = mistral_tokenizer.decode(outputs[0], skip_special_tokens=True)
-    return summary
+        Transcript:
+        {text}
+        """
+
+        # Prepare messages for the chat completion API
+        messages = [
+            {"role": "user", "content": prompt}
+        ]
+
+        # Call the hosted Llama-3.3-70B-Instruct model via OpenAI API
+        completion = client.chat.completions.create(
+            model="meta-llama/Llama-3.3-70B-Instruct",  # Updated model name
+            messages=messages,
+            max_tokens=300,  # Adjust based on desired output length
+            temperature=0.7,  # Control creativity
+        )
+
+        # Extract the action items from the response
+        action_items_text = completion.choices[0].message.content
+
+        # Parse the action items into a list of dictionaries
+        action_items = []
+        for block in action_items_text.split("\n\n"):  # Split by paragraphs
+            task = None
+            assignee = "Unassigned"
+            deadline = "Not specified"
+
+            for line in block.split("\n"):
+                if line.strip().startswith("- Task:"):
+                    task = line.replace("- Task:", "").strip()
+                elif line.strip().startswith("- Assignee:"):
+                    assignee = line.replace("- Assignee:", "").strip()
+                elif line.strip().startswith("- Deadline:"):
+                    deadline = line.replace("- Deadline:", "").strip()
+
+            if task:  # Only add if a task was found
+                action_items.append({
+                    "task": task,
+                    "assignee": assignee,
+                    "deadline": deadline
+                })
+
+        # If no action items are found, add a default one
+        if not action_items:
+            action_items.append({
+                "task": "Review the meeting transcript and identify specific action items.",
+                "assignee": "Unassigned",
+                "deadline": "Not specified"
+            })
+
+        print(f"Extracted action items: {action_items}")
+        return action_items
+
+    except Exception as e:
+        print(f"Error in extract_detailed_action_items: {str(e)}")
+        return [{
+            "task": "Error extracting action items.",
+            "assignee": "Unassigned",
+            "deadline": "Not specified"
+        }]
+
+def summarize_with_llama(text):
+    """
+    Summarize text using Llama-3.3-70B-Instruct hosted on Hugging Face via OpenAI API.
+    """
+    try:
+        # Create a detailed prompt for summarization
+        prompt = f"""
+        Summarize the following meeting transcript in a concise and professional manner. 
+        Focus on the key discussion points, decisions, and conclusions. Do not include action items.
+
+        Format the summary in a clean, readable way with bullet points and paragraphs.
+
+        Transcript:
+        {text}
+        """
+
+        # Prepare messages for the chat completion API
+        messages = [
+            {"role": "user", "content": prompt}
+        ]
+
+        # Call the hosted Llama-3.3-70B-Instruct model via OpenAI API
+        completion = client.chat.completions.create(
+            model="meta-llama/Llama-3.3-70B-Instruct",  # Updated model name
+            messages=messages,
+            max_tokens=500,  # Adjust based on desired summary length
+            temperature=0.7,  # Control creativity
+        )
+
+        # Extract the summary from the response
+        summary = completion.choices[0].message.content
+        print(f"Generated summary length: {len(summary)} characters")
+        return summary
+
+    except Exception as e:
+        print(f"Error in summarize_with_llama: {str(e)}")
+        return ""
 
 def generate_local_summary(text):
     """
-    Generate a summary using Mistral 7B.
+    Generate a summary using Llama-3.3-70B-Instruct.
     """
-    summary = summarize_with_mistral(text)
+    summary = summarize_with_llama(text)
     action_items = extract_detailed_action_items(text)
     return {
         "summary": summary or "No significant summary could be generated.",
@@ -78,7 +216,7 @@ def summarize_and_extract_action_items(text, use_openai=False):
             try:
                 openai.api_key = os.getenv("OPENAI_API_KEY")
                 response = openai.ChatCompletion.create(
-                    model="gpt-4",  # Ensure the correct model name is used
+                    model="gpt-4o-mini",  # Ensure the correct model name is used
                     messages=[
                         {
                             "role": "system", 
@@ -150,34 +288,6 @@ def parse_openai_output(output):
             "summary": "Failed to parse OpenAI output",
             "action_items": [{"task": "Parsing error", "assignee": "N/A", "deadline": "N/A"}]
         }
-
-def extract_detailed_action_items(text):
-    # Sophisticated action item extraction
-    action_patterns = [
-        r"(.*?)\s*should\s*(.*)",
-        r"(.*?)\s*must\s*(.*)",
-        r"Action\s*item:\s*(.*)",
-        r"To\s*do:\s*(.*)",
-        r"need\s*to\s*(.*)"
-    ]
-    
-    action_items = []
-    for pattern in action_patterns:
-        matches = re.findall(pattern, text, re.IGNORECASE)
-        for match in matches:
-            task = match[0] if isinstance(match, tuple) else match
-            cleaned_task = re.sub(r'\s+', ' ', task).strip()
-            
-            # More sophisticated filtering
-            if (len(cleaned_task) > 20 and  # Ensure task is meaningful
-                not any(keyword in cleaned_task.lower() for keyword in ['discuss', 'talk', 'meeting'])):
-                action_items.append({
-                    "task": cleaned_task,
-                    "assignee": "Unassigned",
-                    "deadline": "Not specified"
-                })
-    
-    return action_items
 
 def create_trello_task(task_name, assignee, deadline):
     try:
