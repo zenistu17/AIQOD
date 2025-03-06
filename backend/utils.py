@@ -77,6 +77,44 @@ def transcribe_audio(audio_file_path, chunk_size=20, overlap=5):
         print(f"Error in transcribe_audio: {str(e)}")
         return ""
 
+def summarize_with_llama(text):
+    """
+    Summarize text using Llama-3.3-70B-Instruct hosted on Hugging Face via OpenAI API.
+    """
+    try:
+        # Create a detailed prompt for summarization
+        prompt = f"""
+        Summarize the following meeting transcript in a concise and professional manner. 
+        Focus on the key discussion points, decisions, and conclusions. Do not include action items.
+
+        Format the summary in a clean, readable way with bullet points and paragraphs.
+
+        Transcript:
+        {text}
+        """
+
+        # Prepare messages for the chat completion API
+        messages = [
+            {"role": "user", "content": prompt}
+        ]
+
+        # Call the hosted Llama-3.3-70B-Instruct model via OpenAI API
+        completion = client.chat.completions.create(
+            model="meta-llama/Llama-3.3-70B-Instruct",  # Updated model name
+            messages=messages,
+            max_tokens=500,  # Adjust based on desired summary length
+            temperature=0.7,  # Control creativity
+        )
+
+        # Extract the summary from the response
+        summary = completion.choices[0].message.content
+        print(f"Generated summary length: {len(summary)} characters")
+        return summary
+
+    except Exception as e:
+        print(f"Error in summarize_with_llama: {str(e)}")
+        return ""
+
 def extract_detailed_action_items(text):
     """
     Extract action items using Llama-3.3-70B-Instruct hosted on Hugging Face via OpenAI API.
@@ -154,44 +192,6 @@ def extract_detailed_action_items(text):
             "assignee": "Unassigned",
             "deadline": "Not specified"
         }]
-
-def summarize_with_llama(text):
-    """
-    Summarize text using Llama-3.3-70B-Instruct hosted on Hugging Face via OpenAI API.
-    """
-    try:
-        # Create a detailed prompt for summarization
-        prompt = f"""
-        Summarize the following meeting transcript in a concise and professional manner. 
-        Focus on the key discussion points, decisions, and conclusions. Do not include action items.
-
-        Format the summary in a clean, readable way with bullet points and paragraphs.
-
-        Transcript:
-        {text}
-        """
-
-        # Prepare messages for the chat completion API
-        messages = [
-            {"role": "user", "content": prompt}
-        ]
-
-        # Call the hosted Llama-3.3-70B-Instruct model via OpenAI API
-        completion = client.chat.completions.create(
-            model="meta-llama/Llama-3.3-70B-Instruct",  # Updated model name
-            messages=messages,
-            max_tokens=500,  # Adjust based on desired summary length
-            temperature=0.7,  # Control creativity
-        )
-
-        # Extract the summary from the response
-        summary = completion.choices[0].message.content
-        print(f"Generated summary length: {len(summary)} characters")
-        return summary
-
-    except Exception as e:
-        print(f"Error in summarize_with_llama: {str(e)}")
-        return ""
 
 def generate_local_summary(text):
     """
