@@ -4,12 +4,27 @@ import requests
 import openai
 import torch
 import re
-from transformers import WhisperProcessor, WhisperForConditionalGeneration, T5ForConditionalGeneration, T5Tokenizer
+from transformers import (
+    WhisperProcessor,
+    WhisperForConditionalGeneration,
+    AutoModelForCausalLM,
+    AutoTokenizer,
+)
 
+# Load Whisper model for transcription
 processor = WhisperProcessor.from_pretrained("openai/whisper-small")
 whisper_model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-small")
 
+# Load Mistral 7B model for summarization
+mistral_model_name = "mistralai/Mistral-7B-v0.1"
+mistral_tokenizer = AutoTokenizer.from_pretrained(mistral_model_name, use_auth_token=True)
+mistral_model = AutoModelForCausalLM.from_pretrained(mistral_model_name, use_auth_token=True)
+
 def transcribe_audio(audio_file_path, chunk_size=30, overlap=5):
+    """
+    Transcribe audio to text using Whisper. If the audio is not in English,
+    it will be translated to English.
+    """
     audio, sr = librosa.load(audio_file_path, sr=16000)
     step_samples = (chunk_size - overlap) * sr
     chunk_samples = chunk_size * sr
@@ -17,13 +32,39 @@ def transcribe_audio(audio_file_path, chunk_size=30, overlap=5):
     for i in range(0, len(audio), step_samples):
         chunk = audio[i:i + chunk_samples]
         if len(chunk) < chunk_samples:
-            break  
+            break
         input_features = processor(chunk, sampling_rate=sr, return_tensors="pt").input_features
         with torch.no_grad():
-            predicted_ids = whisper_model.generate(input_features, max_length=448)
+            # Use task="translate" to ensure the output is in English
+            predicted_ids = whisper_model.generate(input_features, max_length=448, task="translate")
         transcript = processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
         transcripts.append(transcript)
     return " ".join(transcripts)
+
+def summarize_with_mistral(text):
+    """
+    Summarize text using Mistral 7B.
+    """
+    input_text = f"Summarize the following meeting transcript professionally. Identify the key points discussed and give them in list format.: {text}"
+    input_ids = mistral_tokenizer(input_text, return_tensors="pt").input_ids
+
+    # Generate summary
+    with torch.no_grad():
+        outputs = mistral_model.generate(input_ids, max_length=500, num_beams=5, early_stopping=True)
+
+    summary = mistral_tokenizer.decode(outputs[0], skip_special_tokens=True)
+    return summary
+
+def generate_local_summary(text):
+    """
+    Generate a summary using Mistral 7B.
+    """
+    summary = summarize_with_mistral(text)
+    action_items = extract_detailed_action_items(text)
+    return {
+        "summary": summary or "No significant summary could be generated.",
+        "action_items": action_items or [{"task": "No specific action items identified.", "assignee": "Unassigned", "deadline": "Not specified"}]
+    }
 
 def summarize_and_extract_action_items(text, use_openai=False):
     try:
@@ -37,7 +78,7 @@ def summarize_and_extract_action_items(text, use_openai=False):
             try:
                 openai.api_key = os.getenv("OPENAI_API_KEY")
                 response = openai.ChatCompletion.create(
-                    model="gpt-4o-mini",  # Ensure the correct model name is used
+                    model="gpt-4",  # Ensure the correct model name is used
                     messages=[
                         {
                             "role": "system", 
@@ -51,8 +92,8 @@ def summarize_and_extract_action_items(text, use_openai=False):
                             {text}
 
                             Please provide:
-                            1. A concise, professional summary of the transcript and list out the key discussion points .
-                            2. Specific, actionable items with potential assignees and deadlines. Note that you are supposed to give atleast one action item minimum.
+                            1. A concise, professional summary of the transcript and list out the key discussion points.
+                            2. Specific, actionable items with potential assignees and deadlines. Note that you are supposed to give at least one action item minimum.
 
                             Format:
                             **Summary:**
@@ -83,45 +124,6 @@ def summarize_and_extract_action_items(text, use_openai=False):
             "summary": f"Error generating summary: {str(e)}",
             "action_items": [{"task": "Summary generation failed", "assignee": "N/A", "deadline": "N/A"}]
         }
-
-def generate_local_summary(text):
-    # Improved local summarization using T5-large model
-    model_name = "t5-large"
-    tokenizer = T5Tokenizer.from_pretrained(model_name)
-    model = T5ForConditionalGeneration.from_pretrained(model_name)
-    
-    # Detailed prompt for summarization
-    input_text = (
-        "Summarize this meeting transcript professionally. "
-        "Capture the main topic, key arguments, and essential insights. "
-        "Provide a clear, concise overview that highlights the core discussion: "
-        f"{text}"
-    )
-    
-    # Tokenize with increased context
-    input_ids = tokenizer.encode(input_text, return_tensors="pt", max_length=1024, truncation=True)
-    
-    # Generate summary with enhanced parameters
-    summary_ids = model.generate(
-        input_ids, 
-        max_length=500,
-        min_length=100,
-        length_penalty=2.0,
-        num_beams=8,
-        early_stopping=True,
-        no_repeat_ngram_size=2
-    )
-    
-    # Decode summary
-    summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
-    
-    # Extract action items from the full text
-    action_items = extract_detailed_action_items(text)
-    
-    return {
-        "summary": summary or "No significant summary could be generated.",
-        "action_items": action_items or [{"task": "No specific action items identified.", "assignee": "Unassigned", "deadline": "Not specified"}]
-    }
 
 def parse_openai_output(output):
     # Parse OpenAI generated summary and action items
