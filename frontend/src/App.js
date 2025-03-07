@@ -9,7 +9,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [customPrompt, setCustomPrompt] = useState(
-    "Summarize the following meeting transcript in a concise and professional manner. Focus on the key discussion points, decisions, and conclusions. Format the summary in a clean, readable way with bullet points and paragraphs."
+    "Summarize the following meeting transcript in a concise and professional manner. Focus on the key discussion points, decisions, and conclusions. Format the summary with each point on a separate line, starting with a bullet point."
   );
 
   const handleFileSelection = (event) => {
@@ -32,7 +32,7 @@ function App() {
     formData.append("customPrompt", customPrompt);
 
     try {
-      const response = await fetch("https://5343-2401-4900-634f-fe94-39ed-a7c1-2f5-86c9.ngrok-free.app/process_audio", {
+      const response = await fetch("http://localhost:5000/process_audio", {
         method: "POST",
         body: formData,
       });
@@ -51,6 +51,24 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Function to render summary with points on separate lines
+  const renderFormattedSummary = () => {
+    if (!summary) return "Summary will be generated...";
+    
+    // Split the summary by bullet points or new lines
+    const summaryPoints = summary.split(/\*|\n-/).filter(point => point.trim() !== "");
+    
+    return (
+      <div className="formatted-summary">
+        {summaryPoints.map((point, index) => (
+          <p key={index} className="summary-point">
+            • {point.trim()}
+          </p>
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -117,7 +135,7 @@ function App() {
           
           <div className="result-card-horizontal summary-card">
             <h2>Meeting Summary</h2>
-            <p>{summary || "Summary will be generated..."}</p>
+            {renderFormattedSummary()}
           </div>
           
           <div className="result-card-horizontal action-items-card">
