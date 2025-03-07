@@ -172,6 +172,70 @@ body {
   gap: 5px;
 }
 
+/* Add these styles to your original App.css */
+
+/* Prompt Section */
+.prompt-section {
+  margin-bottom: 20px;
+}
+
+.prompt-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-color);
+  font-weight: bold;
+}
+
+.prompt-textarea {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  background-color: white;
+  font-size: 14px;
+  box-shadow: 0 2px 5px var(--shadow-color);
+  resize: vertical;
+  margin-bottom: 15px;
+}
+
+/* Generate Button */
+.generate-button {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px var(--shadow-color);
+}
+
+.generate-button:hover:not(:disabled) {
+  background-color: #5a52d5;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 8px var(--shadow-color);
+}
+
+.generate-button:disabled {
+  background-color: #aab7c4;
+  cursor: not-allowed;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .results-section-horizontal {
+    grid-template-columns: 1fr;
+  }
+
+  .result-card-horizontal {
+    margin-bottom: 20px;
+  }
+}
+
 .task {
   font-weight: 600;
 }

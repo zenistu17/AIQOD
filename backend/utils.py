@@ -77,17 +77,23 @@ def transcribe_audio(audio_file_path, chunk_size=20, overlap=5):
         print(f"Error in transcribe_audio: {str(e)}")
         return ""
 
-def summarize_with_llama(text):
+def summarize_with_llama(text, custom_prompt=None):
     """
     Summarize text using Llama-3.3-70B-Instruct hosted on Hugging Face via OpenAI API.
     """
     try:
-        # Create a detailed prompt for summarization
-        prompt = f"""
-        Summarize the following meeting transcript in a concise and professional manner. 
-        Focus on the key discussion points, decisions, and conclusions. Do not include action items.
+        # Use custom prompt if provided, otherwise use default
+        if not custom_prompt or custom_prompt.strip() == "":
+            custom_prompt = """
+            Summarize the following meeting transcript in a concise and professional manner. 
+            Focus on the key discussion points, decisions, and conclusions. Do not include action items.
 
-        Format the summary in a clean, readable way with bullet points and paragraphs.
+            Format the summary in a clean, readable way with bullet points and paragraphs.
+            """
+        
+        # Create prompt with the custom instructions
+        prompt = f"""
+        {custom_prompt}
 
         Transcript:
         {text}
@@ -193,28 +199,35 @@ def extract_detailed_action_items(text):
             "deadline": "Not specified"
         }]
 
-def generate_local_summary(text):
+def generate_local_summary(text, custom_prompt=None):
     """
     Generate a summary using Llama-3.3-70B-Instruct.
     """
-    summary = summarize_with_llama(text)
+    summary = summarize_with_llama(text, custom_prompt)
     action_items = extract_detailed_action_items(text)
     return {
         "summary": summary or "No significant summary could be generated.",
         "action_items": action_items or [{"task": "No specific action items identified.", "assignee": "Unassigned", "deadline": "Not specified"}]
     }
 
-def summarize_and_extract_action_items(text, use_openai=False):
+def summarize_and_extract_action_items(text, use_openai=False, custom_prompt=None):
     try:
         if use_openai:
             # Ensure OpenAI API key is set
             if not os.getenv("OPENAI_API_KEY"):
                 print("OpenAI API key is not set. Falling back to local model.")
-                return generate_local_summary(text)
+                return generate_local_summary(text, custom_prompt)
             
             print("Using OpenAI for summarization and action item extraction.")  # Log OpenAI usage
             try:
                 openai.api_key = os.getenv("OPENAI_API_KEY")
+                
+                # Use custom prompt if provided, otherwise use default
+                if not custom_prompt or custom_prompt.strip() == "":
+                    summary_instruction = "A concise, professional summary of the transcript and list out the key discussion points."
+                else:
+                    summary_instruction = custom_prompt
+                
                 response = openai.ChatCompletion.create(
                     model="gpt-4o-mini",  # Ensure the correct model name is used
                     messages=[
@@ -230,7 +243,7 @@ def summarize_and_extract_action_items(text, use_openai=False):
                             {text}
 
                             Please provide:
-                            1. A concise, professional summary of the transcript and list out the key discussion points.
+                            1. {summary_instruction}
                             2. Specific, actionable items with potential assignees and deadlines. Note that you are supposed to give at least one action item minimum.
 
                             Format:
@@ -251,11 +264,11 @@ def summarize_and_extract_action_items(text, use_openai=False):
                 return parse_openai_output(output)
             except Exception as e:
                 print(f"OpenAI API call failed: {str(e)}")
-                return generate_local_summary(text)
+                return generate_local_summary(text, custom_prompt)
         
         # Local method if OpenAI is not used
         print("Using local model for summarization and action item extraction.")  # Log local model usage
-        return generate_local_summary(text)
+        return generate_local_summary(text, custom_prompt)
     
     except Exception as e:
         return {

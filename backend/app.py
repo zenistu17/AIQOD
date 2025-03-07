@@ -44,6 +44,7 @@ def process_audio():
     try:
         file = request.files.get("audio")
         selected_model = request.form.get("model", "openai")  # Get model choice
+        custom_prompt = request.form.get("customPrompt", "")  # Get custom prompt
         
         if not file:
             logger.error("No file provided")
@@ -85,7 +86,7 @@ def process_audio():
         logger.info(f"Starting summary generation using model: {selected_model}")
         
         use_openai = selected_model == "openai"  # Convert to boolean
-        summary_data = summarize_and_extract_action_items(transcript, use_openai=use_openai)
+        summary_data = summarize_and_extract_action_items(transcript, use_openai=use_openai, custom_prompt=custom_prompt)
         
         action_items = summary_data.get("action_items", [])
         
