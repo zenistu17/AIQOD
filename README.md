@@ -1,6 +1,5 @@
 # Meeting Summarizer 🎙️📝
 
-## Project Banner
 Automate your meeting notes with AI-powered transcription, summarization, and action item extraction.
 
 ## Overview
