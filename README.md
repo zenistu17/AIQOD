@@ -94,8 +94,9 @@ npm start
    - Action items can be automatically added to Trello (if configured).
 
 ## Screenshots 📸
-- **Upload File**: Upload a meeting recording.
-- **Summary and Action Items**: View the transcript, summary, and action items.
+![WhatsApp Image 2025-03-07 at 10 43 58_d215ef30](https://github.com/user-attachments/assets/c910c3ae-f54d-4ae9-86e3-265f167b6a05)
+![WhatsApp Image 2025-03-07 at 10 36 51_22c7583a](https://github.com/user-attachments/assets/2cb87517-4a67-49ec-bf36-b576b866270c)
+
 
 ## Configuration ⚙️
 ### Custom Prompts
